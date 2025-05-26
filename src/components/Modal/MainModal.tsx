@@ -1,5 +1,4 @@
 import { useState } from 'react';
-// You'll need to import the close icon or replace it with an X
 import { IoIosClose } from 'react-icons/io';
 
 interface MainModalProps {
@@ -18,16 +17,20 @@ export default function MainModal({
   });
 
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    document.body.style.overflow = 'unset'; // Restore scrolling
-    // Reset form data
     setFormData({
       name: '',
       email: '',
       message: '',
     });
+    setError(null);
+    setSuccess(false);
+    // Re-enable background scrolling
+    document.body.style.overflow = 'unset';
   };
 
   const handleInputChange = (
@@ -42,23 +45,35 @@ export default function MainModal({
 
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
     setLoading(true);
-    const res = await fetch('/api/send-to-airtable', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: 'Noam Cohen',
-        email: 'noamcohen2367@gmail.com',
-      }),
-    });
+    setError(null);
+    setSuccess(false);
 
-    const data = await res.json();
-    console.log(data);
-    setLoading(false);
-    handleCloseModal();
+    try {
+      const res = await fetch('/api/send-to-airtable', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData), // Use actual form data instead of hardcoded values
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccess(true);
+        setTimeout(() => {
+          handleCloseModal();
+        }, 2000); // Close modal after 2 seconds to show success message
+      } else {
+        setError(data.error || 'Failed to submit form');
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -71,6 +86,8 @@ export default function MainModal({
   if (isModalOpen) {
     document.body.style.overflow = 'hidden';
   }
+
+  if (!isModalOpen) return null;
 
   return (
     <div
@@ -114,31 +131,42 @@ export default function MainModal({
               name="email"
               value={formData.email}
               onChange={handleInputChange}
+              required
               placeholder="Enter your email"
             />
           </div>
 
           <div className="form-group">
             <label htmlFor="message">Message</label>
-            <input
+            <textarea
               id="message"
               name="message"
               value={formData.message}
               onChange={handleInputChange}
+              required
               placeholder="Enter custom message"
             />
           </div>
+
+          {error && <div className="error-message">{error}</div>}
+
+          {success && (
+            <div className="success-message">
+              Message sent successfully! Closing modal...
+            </div>
+          )}
 
           <div className="form-actions">
             <button
               type="button"
               className="btn-secondary"
               onClick={handleCloseModal}
+              disabled={loading}
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              Submit
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Submitting...' : 'Submit'}
             </button>
           </div>
         </form>

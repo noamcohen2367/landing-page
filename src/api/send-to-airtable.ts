@@ -1,45 +1,55 @@
-// pages/api/send-to-airtable.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import axios from 'axios';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { name, email } = req.body;
+  const { name, email, message } = req.body;
+
+  // Validate required fields
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
+  }
 
   try {
-    const response = await axios.post(
-      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_TABLE_NAME}`,
+    const airtableResponse = await fetch(
+      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Landing%20Page%20Task`,
       {
-        records: [
-          {
-            fields: {
-              Name: name,
-              Email: email,
-            },
-          },
-        ],
-      },
-      {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          fields: {
+            Name: name,
+            Email: email,
+            Message: message,
+          },
+        }),
       }
     );
 
-    res
-      .status(200)
-      .json({ message: 'Data sent successfully!', data: response.data });
+    if (!airtableResponse.ok) {
+      const errorData = await airtableResponse.json();
+      console.error('Airtable error:', errorData);
+      return res.status(500).json({ error: 'Failed to save to Airtable' });
+    }
+
+    const data = await airtableResponse.json();
+    return res.status(200).json({ success: true, id: data.id });
   } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ message: 'Something went wrong sending data to Airtable.' });
+    console.error('API error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
